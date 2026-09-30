@@ -85,7 +85,10 @@ Optional. Create `config.json` in the plugin config directory
 ```
 
 - `labels`: keys assigned to panes, top-left to bottom-right. Duplicates and
-  `q` are ignored. At most `len(labels)` panes get a label.
+  `q` are ignored. At most `len(labels)` panes get a label. Only printable
+  ASCII characters without spaces (`!` … `~`) are supported; if `labels`
+  contains anything else (e.g. non-ASCII or spaces), a warning is printed and
+  the default labels are used.
 - `timeout`: seconds before the popup closes by itself.
 - `agent_color`: border and badge color for agent panes (`#rrggbb` or `#rgb`).
   Defaults to green.
