@@ -381,7 +381,7 @@ def main():
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
-        tty.setraw(fd)
+        tty.setraw(fd, termios.TCSANOW)  # keep keys pressed before raw mode
         pending = query_terminal_colors(fd)
         sys.stdout.write("\033[?25l")
         draw(panes, labels, layout["area"], infos)
