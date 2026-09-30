@@ -12,13 +12,15 @@ Each pane gets a one-key label, top-left first: the home row
 bottom row (`z` … `m`), up to 25 panes. Press a label to focus that pane.
 
 ```
-┏━ ● current ━━━━━━━━━━━━━━━━━━┓┌──────────────────────────────┐
-┃                              ┃│                              │
-┃          ▐█  A  █▌           ┃│          ▐█  S  █▌           │
-┃                              ┃│                              │
-┃            claude            ┃│            codex             │
-┃      fix-login-redirect      ┃│          review PR           │
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────┘
+┌──────────────────────────────┐
+│              a               │
+│            claude            │
+│      fix-login-redirect      │
+└──────────────────────────────┘
+┌──────────────┐┌──────────────┐
+│      s       ││      d       │
+│    codex     ││  ~/project   │
+└──────────────┘└──────────────┘
 Press a key to jump / q or Esc to close
 ```
 
