@@ -68,6 +68,16 @@ def parse_color(value):
         raise ValueError(f"invalid color {value!r} (use #rrggbb or #rgb)") from None
 
 
+def parse_labels(value):
+    """Keep labels readable as one keypress byte: printable ASCII, no space."""
+    bad = sorted({c for c in value if not "!" <= c <= "~"})
+    if bad:
+        print(f"display-panes: ignoring labels with unsupported characters {''.join(bad)!r}"
+              " (use printable ASCII, no spaces)", file=sys.stderr)
+        return DEFAULT_LABELS
+    return "".join(dict.fromkeys(c for c in value if c not in CLOSE_KEYS))
+
+
 def load_config():
     """Read optional overrides from $HERDR_PLUGIN_CONFIG_DIR/config.json."""
     global AGENT_RGB
@@ -77,7 +87,7 @@ def load_config():
         try:
             with open(os.path.join(config_dir, "config.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
-            labels = "".join(dict.fromkeys(c for c in str(cfg.get("labels", labels)) if c not in CLOSE_KEYS))
+            labels = parse_labels(str(cfg.get("labels", labels)))
             timeout = float(cfg.get("timeout", timeout))
             if "agent_color" in cfg:
                 AGENT_RGB = parse_color(cfg["agent_color"])
