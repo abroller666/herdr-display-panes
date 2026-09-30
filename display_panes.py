@@ -20,7 +20,9 @@ import unicodedata
 
 DEFAULT_LABELS = "asdfghjklwertyuiopzxcvbnm"  # home row, then top and bottom rows (no q)
 DEFAULT_TIMEOUT = 10  # seconds, like tmux display-panes-time
+MAX_TIMEOUT = 100_000_000  # macOS select() rejects larger timeouts with EINVAL
 CLOSE_KEYS = ("q", "\x1b", "\x03")  # q, Esc, Ctrl-C
+HERDR_TIMEOUT = 5  # seconds to wait for the Herdr CLI / socket to respond
 
 
 
@@ -68,6 +70,16 @@ def parse_color(value):
         raise ValueError(f"invalid color {value!r} (use #rrggbb or #rgb)") from None
 
 
+def parse_labels(value):
+    """Keep labels readable as one keypress byte: printable ASCII, no space."""
+    bad = sorted({c for c in value if not "!" <= c <= "~"})
+    if bad:
+        print(f"display-panes: ignoring labels with unsupported characters {''.join(bad)!r}"
+              " (use printable ASCII, no spaces)", file=sys.stderr)
+        return DEFAULT_LABELS
+    return "".join(dict.fromkeys(c for c in value if c not in CLOSE_KEYS))
+
+
 def load_config():
     """Read optional overrides from $HERDR_PLUGIN_CONFIG_DIR/config.json."""
     global AGENT_RGB
@@ -77,21 +89,34 @@ def load_config():
         try:
             with open(os.path.join(config_dir, "config.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
-            labels = "".join(dict.fromkeys(c for c in str(cfg.get("labels", labels)) if c not in CLOSE_KEYS))
+            if not isinstance(cfg, dict):
+                raise ValueError("expected a JSON object")
+            labels = parse_labels(str(cfg.get("labels", labels)))
             timeout = float(cfg.get("timeout", timeout))
-            if "agent_color" in cfg:
-                AGENT_RGB = parse_color(cfg["agent_color"])
-            for name, color in (cfg.get("agent_colors") or {}).items():
-                AGENT_COLORS[str(name).lower()] = parse_color(color)
+            if not 0 <= timeout <= MAX_TIMEOUT:  # also rejects NaN
+                raise ValueError(f"invalid timeout {timeout!r} (use 0 to {MAX_TIMEOUT} seconds)")
+            agent_rgb = parse_color(cfg["agent_color"]) if "agent_color" in cfg else AGENT_RGB
+            agent_colors = cfg.get("agent_colors") or {}
+            if not isinstance(agent_colors, dict):
+                raise ValueError("agent_colors must be an object")
+            agent_colors = {str(name).lower(): parse_color(color) for name, color in agent_colors.items()}
+            AGENT_RGB = agent_rgb
+            AGENT_COLORS.update(agent_colors)
         except FileNotFoundError:
             pass
-        except (OSError, ValueError, TypeError) as e:
+        except (OSError, ValueError, TypeError, OverflowError) as e:
             print(f"display-panes: ignoring invalid config.json: {e}", file=sys.stderr)
+            labels, timeout = DEFAULT_LABELS, DEFAULT_TIMEOUT
     return labels or DEFAULT_LABELS, timeout
 
 
 def herdr(*args):
-    out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True)
+    try:
+        out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True, timeout=HERDR_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"display-panes: herdr {' '.join(args)} did not respond within {HERDR_TIMEOUT}s")
+    except OSError as e:
+        sys.exit(f"display-panes: could not run herdr: {e}")
     return json.loads(out.stdout)["result"]
 
 
@@ -99,12 +124,17 @@ def focus(pane_id):
     path = os.environ.get("HERDR_SOCKET_PATH")
     if not path:
         return
-    s = socket.socket(socket.AF_UNIX)
-    s.connect(path)
     req = {"id": "display-panes", "method": "pane.focus", "params": {"pane_id": pane_id}}
-    s.sendall((json.dumps(req) + "\n").encode())
-    s.recv(65536)
-    s.close()
+    try:
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(HERDR_TIMEOUT)
+            s.connect(path)
+            s.sendall((json.dumps(req) + "\n").encode())
+            s.recv(65536)
+    except socket.timeout:
+        sys.exit(f"display-panes: Herdr socket did not respond within {HERDR_TIMEOUT}s")
+    except OSError as e:
+        sys.exit(f"display-panes: could not focus pane via Herdr socket: {e}")
 
 
 def find_pane_id(value):
@@ -140,16 +170,22 @@ def display_width(text):
     return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
 
 
+def sanitize(text):
+    """Replace control characters (newline, ESC, BEL, ...) so they can't reach the terminal."""
+    return "".join("?" if unicodedata.category(ch) == "Cc" else ch for ch in text)
+
+
 def fit(text, width):
     """Truncate text to a display width, ending with an ellipsis if cut."""
     if display_width(text) <= width:
         return text
-    out = ""
+    out, used = [], 0
     for ch in text:
-        if display_width(out + ch) > width - 1:
+        used += display_width(ch)
+        if used > width - 1:
             break
-        out += ch
-    return out + "…" if width > 0 else ""
+        out.append(ch)
+    return "".join(out) + "…" if width > 0 else ""
 
 
 def accent(info, focused):
@@ -176,12 +212,15 @@ def use_terminal_colors(bg_rgb, fg_rgb):
 
 
 def query_terminal_colors(fd, timeout=0.2):
-    """Ask the terminal for its background (OSC 11) and foreground (OSC 10)."""
+    """Ask the terminal for its background (OSC 11) and foreground (OSC 10).
+
+    Returns any ordinary input (keypresses) read alongside the responses.
+    """
     sys.stdout.write("\033]11;?\033\\\033]10;?\033\\")
     sys.stdout.flush()
     buf = ""
     end = time.monotonic() + timeout
-    while time.monotonic() < end and buf.count("rgb:") < 2:
+    while time.monotonic() < end and len(re.findall(r"\x1b\]1[01];[^\x07\x1b]*(?:\x07|\x1b\\)", buf)) < 2:
         if select.select([fd], [], [], max(0, end - time.monotonic()))[0]:
             buf += os.read(fd, 1024).decode(errors="ignore")
     found = {}
@@ -189,6 +228,8 @@ def query_terminal_colors(fd, timeout=0.2):
         found[code] = tuple(int(v, 16) * 255 // (16 ** len(v) - 1) for v in (r, g, b))
     if "1" in found and "0" in found:
         use_terminal_colors(found["1"], found["0"])
+    # Drop the responses (and any cut off by the timeout); keep the keypresses.
+    return re.sub(r"\x1b\]1[01];[^\x07\x1b]*(?:\x07|\x1b\\|\x1b?$)", "", buf)
 
 
 def badge(content, pad_x, pad_y):
@@ -268,10 +309,11 @@ def draw(panes, labels, area, infos):
         # the focused pane is drawn at full strength; the others are dimmed
         if focused:
             c = BOLD + fg(rgb)
+            pane_bg = bg(mix(rgb, 0.16))
             for y in range(y0 + 1, y1):
                 for x in range(x0 + 1, x1):
                     if 0 <= x < cols and 0 <= y < rows:
-                        tint[y][x] = bg(mix(rgb, 0.16))
+                        tint[y][x] = pane_bg
         else:
             c = fg(mix(rgb, 0.45)) if rgb else fg(GRAY_RGB)
         h_, v_, tl, tr, bl, br = HEAVY_BOX if focused else LIGHT_BOX
@@ -308,7 +350,7 @@ def draw(panes, labels, area, infos):
             # first line (agent name) in the pane color, the rest dimmer
             text_rgb = rgb if rgb and n == 0 and info.get("agent") else TEXT_RGB
             style = BOLD + fg(text_rgb if focused else mix(text_rgb, 0.55))
-            text = fit(text, width)
+            text = fit(sanitize(text), width)
             x = cx - display_width(text) // 2
             for ch in text:
                 put(x, y, ch, style)
@@ -340,11 +382,14 @@ def main():
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        query_terminal_colors(fd)
+        pending = query_terminal_colors(fd)
         sys.stdout.write("\033[?25l")
         draw(panes, labels, layout["area"], infos)
-        ready, _, _ = select.select([fd], [], [], timeout)
-        key = os.read(fd, 1).decode(errors="ignore") if ready else ""
+        if pending:
+            key = pending[0]
+        else:
+            ready, _, _ = select.select([fd], [], [], timeout)
+            key = os.read(fd, 1).decode(errors="ignore") if ready else ""
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
         sys.stdout.write("\033[?25h")
