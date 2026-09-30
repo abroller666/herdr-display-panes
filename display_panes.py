@@ -21,6 +21,7 @@ import unicodedata
 DEFAULT_LABELS = "asdfghjklwertyuiopzxcvbnm"  # home row, then top and bottom rows (no q)
 DEFAULT_TIMEOUT = 10  # seconds, like tmux display-panes-time
 CLOSE_KEYS = ("q", "\x1b", "\x03")  # q, Esc, Ctrl-C
+HERDR_TIMEOUT = 5  # seconds to wait for the Herdr CLI / socket to respond
 
 
 
@@ -91,7 +92,12 @@ def load_config():
 
 
 def herdr(*args):
-    out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True)
+    try:
+        out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True, timeout=HERDR_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"display-panes: herdr {' '.join(args)} did not respond within {HERDR_TIMEOUT}s")
+    except OSError as e:
+        sys.exit(f"display-panes: could not run herdr: {e}")
     return json.loads(out.stdout)["result"]
 
 
@@ -99,12 +105,17 @@ def focus(pane_id):
     path = os.environ.get("HERDR_SOCKET_PATH")
     if not path:
         return
-    s = socket.socket(socket.AF_UNIX)
-    s.connect(path)
     req = {"id": "display-panes", "method": "pane.focus", "params": {"pane_id": pane_id}}
-    s.sendall((json.dumps(req) + "\n").encode())
-    s.recv(65536)
-    s.close()
+    try:
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(HERDR_TIMEOUT)
+            s.connect(path)
+            s.sendall((json.dumps(req) + "\n").encode())
+            s.recv(65536)
+    except socket.timeout:
+        sys.exit(f"display-panes: Herdr socket did not respond within {HERDR_TIMEOUT}s")
+    except OSError as e:
+        sys.exit(f"display-panes: could not focus pane via Herdr socket: {e}")
 
 
 def find_pane_id(value):
