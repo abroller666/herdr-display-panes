@@ -52,7 +52,7 @@ herdr plugin install abroller666/herdr-display-panes
 To pin a release, pass `--ref`:
 
 ```sh
-herdr plugin install abroller666/herdr-display-panes --ref v0.2.0
+herdr plugin install abroller666/herdr-display-panes --ref v0.2.1
 ```
 
 Add a keybinding to `~/.config/herdr/config.toml`:
