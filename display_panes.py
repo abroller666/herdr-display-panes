@@ -144,12 +144,13 @@ def fit(text, width):
     """Truncate text to a display width, ending with an ellipsis if cut."""
     if display_width(text) <= width:
         return text
-    out = ""
+    out, used = [], 0
     for ch in text:
-        if display_width(out + ch) > width - 1:
+        used += display_width(ch)
+        if used > width - 1:
             break
-        out += ch
-    return out + "…" if width > 0 else ""
+        out.append(ch)
+    return "".join(out) + "…" if width > 0 else ""
 
 
 def accent(info, focused):
