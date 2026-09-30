@@ -4,6 +4,8 @@
 
 tmux's `display-panes` for [Herdr](https://herdr.dev).
 
+![herdr-display-panes demo](assets/demo.gif)
+
 Press one key to open a popup with a map of the panes in the current tab.
 Each pane gets a one-key label, top-left first: the home row
 (`a` `s` `d` `f` `g` `h` `j` `k` `l`), then the top row (`w` … `p`) and the
