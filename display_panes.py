@@ -20,6 +20,7 @@ import unicodedata
 
 DEFAULT_LABELS = "asdfghjklwertyuiopzxcvbnm"  # home row, then top and bottom rows (no q)
 DEFAULT_TIMEOUT = 10  # seconds, like tmux display-panes-time
+MAX_TIMEOUT = 100_000_000  # macOS select() rejects larger timeouts with EINVAL
 CLOSE_KEYS = ("q", "\x1b", "\x03")  # q, Esc, Ctrl-C
 
 
@@ -77,16 +78,24 @@ def load_config():
         try:
             with open(os.path.join(config_dir, "config.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
+            if not isinstance(cfg, dict):
+                raise ValueError("expected a JSON object")
             labels = "".join(dict.fromkeys(c for c in str(cfg.get("labels", labels)) if c not in CLOSE_KEYS))
             timeout = float(cfg.get("timeout", timeout))
-            if "agent_color" in cfg:
-                AGENT_RGB = parse_color(cfg["agent_color"])
-            for name, color in (cfg.get("agent_colors") or {}).items():
-                AGENT_COLORS[str(name).lower()] = parse_color(color)
+            if not 0 <= timeout <= MAX_TIMEOUT:  # also rejects NaN
+                raise ValueError(f"invalid timeout {timeout!r} (use 0 to {MAX_TIMEOUT} seconds)")
+            agent_rgb = parse_color(cfg["agent_color"]) if "agent_color" in cfg else AGENT_RGB
+            agent_colors = cfg.get("agent_colors") or {}
+            if not isinstance(agent_colors, dict):
+                raise ValueError("agent_colors must be an object")
+            agent_colors = {str(name).lower(): parse_color(color) for name, color in agent_colors.items()}
+            AGENT_RGB = agent_rgb
+            AGENT_COLORS.update(agent_colors)
         except FileNotFoundError:
             pass
-        except (OSError, ValueError, TypeError) as e:
+        except (OSError, ValueError, TypeError, OverflowError) as e:
             print(f"display-panes: ignoring invalid config.json: {e}", file=sys.stderr)
+            labels, timeout = DEFAULT_LABELS, DEFAULT_TIMEOUT
     return labels or DEFAULT_LABELS, timeout
 
 
