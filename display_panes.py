@@ -268,10 +268,11 @@ def draw(panes, labels, area, infos):
         # the focused pane is drawn at full strength; the others are dimmed
         if focused:
             c = BOLD + fg(rgb)
+            pane_bg = bg(mix(rgb, 0.16))
             for y in range(y0 + 1, y1):
                 for x in range(x0 + 1, x1):
                     if 0 <= x < cols and 0 <= y < rows:
-                        tint[y][x] = bg(mix(rgb, 0.16))
+                        tint[y][x] = pane_bg
         else:
             c = fg(mix(rgb, 0.45)) if rgb else fg(GRAY_RGB)
         h_, v_, tl, tr, bl, br = HEAVY_BOX if focused else LIGHT_BOX
