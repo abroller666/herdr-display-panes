@@ -193,12 +193,15 @@ def use_terminal_colors(bg_rgb, fg_rgb):
 
 
 def query_terminal_colors(fd, timeout=0.2):
-    """Ask the terminal for its background (OSC 11) and foreground (OSC 10)."""
+    """Ask the terminal for its background (OSC 11) and foreground (OSC 10).
+
+    Returns any ordinary input (keypresses) read alongside the responses.
+    """
     sys.stdout.write("\033]11;?\033\\\033]10;?\033\\")
     sys.stdout.flush()
     buf = ""
     end = time.monotonic() + timeout
-    while time.monotonic() < end and buf.count("rgb:") < 2:
+    while time.monotonic() < end and len(re.findall(r"\x1b\]1[01];[^\x07\x1b]*(?:\x07|\x1b\\)", buf)) < 2:
         if select.select([fd], [], [], max(0, end - time.monotonic()))[0]:
             buf += os.read(fd, 1024).decode(errors="ignore")
     found = {}
@@ -206,6 +209,8 @@ def query_terminal_colors(fd, timeout=0.2):
         found[code] = tuple(int(v, 16) * 255 // (16 ** len(v) - 1) for v in (r, g, b))
     if "1" in found and "0" in found:
         use_terminal_colors(found["1"], found["0"])
+    # Drop the responses (and any cut off by the timeout); keep the keypresses.
+    return re.sub(r"\x1b\]1[01];[^\x07\x1b]*(?:\x07|\x1b\\|\x1b?$)", "", buf)
 
 
 def badge(content, pad_x, pad_y):
@@ -358,11 +363,14 @@ def main():
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        query_terminal_colors(fd)
+        pending = query_terminal_colors(fd)
         sys.stdout.write("\033[?25l")
         draw(panes, labels, layout["area"], infos)
-        ready, _, _ = select.select([fd], [], [], timeout)
-        key = os.read(fd, 1).decode(errors="ignore") if ready else ""
+        if pending:
+            key = pending[0]
+        else:
+            ready, _, _ = select.select([fd], [], [], timeout)
+            key = os.read(fd, 1).decode(errors="ignore") if ready else ""
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
         sys.stdout.write("\033[?25h")
