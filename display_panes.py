@@ -140,6 +140,11 @@ def display_width(text):
     return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
 
 
+def sanitize(text):
+    """Replace control characters (newline, ESC, BEL, ...) so they can't reach the terminal."""
+    return "".join("?" if unicodedata.category(ch) == "Cc" else ch for ch in text)
+
+
 def fit(text, width):
     """Truncate text to a display width, ending with an ellipsis if cut."""
     if display_width(text) <= width:
@@ -310,7 +315,7 @@ def draw(panes, labels, area, infos):
             # first line (agent name) in the pane color, the rest dimmer
             text_rgb = rgb if rgb and n == 0 and info.get("agent") else TEXT_RGB
             style = BOLD + fg(text_rgb if focused else mix(text_rgb, 0.55))
-            text = fit(text, width)
+            text = fit(sanitize(text), width)
             x = cx - display_width(text) // 2
             for ch in text:
                 put(x, y, ch, style)
