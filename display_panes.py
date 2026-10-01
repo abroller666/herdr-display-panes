@@ -110,7 +110,7 @@ def load_config():
     return labels or DEFAULT_LABELS, timeout
 
 
-def herdr(*args):
+def herdr_cli(*args):
     try:
         out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True, timeout=HERDR_TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -120,21 +120,44 @@ def herdr(*args):
     return json.loads(out.stdout)["result"]
 
 
-def focus(pane_id):
-    path = os.environ.get("HERDR_SOCKET_PATH")
-    if not path:
-        return
-    req = {"id": "display-panes", "method": "pane.focus", "params": {"pane_id": pane_id}}
+def herdr_socket(path, method, params):
+    """One request over the Herdr socket API (much faster than spawning the CLI)."""
+    req = {"id": "display-panes", "method": method, "params": params}
+    reply = b""
     try:
         with socket.socket(socket.AF_UNIX) as s:
             s.settimeout(HERDR_TIMEOUT)
             s.connect(path)
             s.sendall((json.dumps(req) + "\n").encode())
-            s.recv(65536)
+            while not reply.endswith(b"\n"):
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                reply += chunk
     except socket.timeout:
         sys.exit(f"display-panes: Herdr socket did not respond within {HERDR_TIMEOUT}s")
     except OSError as e:
-        sys.exit(f"display-panes: could not focus pane via Herdr socket: {e}")
+        sys.exit(f"display-panes: could not reach Herdr socket: {e}")
+    try:
+        resp = json.loads(reply)
+    except ValueError:
+        sys.exit(f"display-panes: unexpected reply from Herdr socket for {method}")
+    if "error" in resp:
+        err = resp["error"]
+        sys.exit(f"display-panes: Herdr {method} failed: {err.get('message', err) if isinstance(err, dict) else err}")
+    return resp["result"]
+
+
+def herdr(method, params, *cli_args):
+    """Call Herdr over its socket, falling back to the CLI when there is no socket."""
+    path = os.environ.get("HERDR_SOCKET_PATH")
+    return herdr_socket(path, method, params) if path else herdr_cli(*cli_args)
+
+
+def focus(pane_id):
+    path = os.environ.get("HERDR_SOCKET_PATH")
+    if path:
+        herdr_socket(path, "pane.focus", {"pane_id": pane_id})
 
 
 def find_pane_id(value):
@@ -374,9 +397,10 @@ def draw(panes, labels, area, infos):
 def main():
     labels, timeout = load_config()
     active = active_pane_id()
-    layout = herdr("pane", "layout", *(["--pane", active] if active else ["--current"]))["layout"]
+    layout = herdr("pane.layout", {"pane_id": active} if active else {},
+                   "pane", "layout", *(["--pane", active] if active else ["--current"]))["layout"]
     panes = sorted(layout["panes"], key=lambda p: (p["rect"]["y"], p["rect"]["x"]))[: len(labels)]
-    infos = {p["pane_id"]: p for p in herdr("pane", "list")["panes"]}
+    infos = {p["pane_id"]: p for p in herdr("pane.list", {}, "pane", "list")["panes"]}
 
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
