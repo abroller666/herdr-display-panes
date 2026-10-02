@@ -9,9 +9,7 @@ import json
 import re
 import os
 import select
-import shutil
 import socket
-import subprocess
 import sys
 import termios
 import time
@@ -111,6 +109,8 @@ def load_config():
 
 
 def herdr_cli(*args):
+    import subprocess  # only needed without a socket; importing it costs ~4ms at startup
+
     try:
         out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True, timeout=HERDR_TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -291,7 +291,10 @@ def describe(info):
 
 
 def draw(panes, labels, area, infos):
-    cols, rows = shutil.get_terminal_size()
+    try:
+        cols, rows = os.get_terminal_size(sys.stdout.fileno())  # cheaper than importing shutil
+    except OSError:
+        cols, rows = 80, 24
     rows -= 1  # last line is the hint
     sx = cols / area["width"]
     sy = rows / area["height"]
