@@ -56,7 +56,7 @@ herdr plugin install abroller666/herdr-display-panes
 リリースを固定する場合は `--ref` を指定します:
 
 ```sh
-herdr plugin install abroller666/herdr-display-panes --ref v0.2.4
+herdr plugin install abroller666/herdr-display-panes --ref v0.2.5
 ```
 
 `~/.config/herdr/config.toml` にキーバインドを追加します:
