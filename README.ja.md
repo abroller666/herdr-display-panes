@@ -1,5 +1,9 @@
 # herdr-display-panes
 
+[![release](https://img.shields.io/github/v/release/abroller666/herdr-display-panes)](https://github.com/abroller666/herdr-display-panes/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![herdr plugin](https://img.shields.io/badge/herdr-plugin-8ec07c)](https://herdr.dev/plugins/)
+
 [English](README.md)
 
 [Herdr](https://herdr.dev) で tmux の `display-panes` を使えるようにするプラグインです。

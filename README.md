@@ -1,5 +1,9 @@
 # herdr-display-panes
 
+[![release](https://img.shields.io/github/v/release/abroller666/herdr-display-panes)](https://github.com/abroller666/herdr-display-panes/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![herdr plugin](https://img.shields.io/badge/herdr-plugin-8ec07c)](https://herdr.dev/plugins/)
+
 [日本語](README.ja.md)
 
 tmux's `display-panes` for [Herdr](https://herdr.dev).
