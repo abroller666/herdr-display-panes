@@ -6,8 +6,8 @@ with a home-row key, and focuses the pane whose key you press.
 """
 
 import json
-import re
 import os
+import re
 import select
 import socket
 import sys
@@ -25,11 +25,11 @@ HERDR_TIMEOUT = 5  # seconds to wait for the Herdr CLI / socket to respond
 
 
 def fg(rgb):
-    return "\033[38;2;%d;%d;%dm" % rgb
+    return "\033[38;2;{};{};{}m".format(*rgb)
 
 
 def bg(rgb):
-    return "\033[48;2;%d;%d;%dm" % rgb
+    return "\033[48;2;{};{};{}m".format(*rgb)
 
 
 GREEN_RGB = (158, 206, 106)
@@ -88,7 +88,7 @@ def load_config():
             with open(os.path.join(config_dir, "config.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
             if not isinstance(cfg, dict):
-                raise ValueError("expected a JSON object")
+                raise TypeError("expected a JSON object")
             labels = parse_labels(str(cfg.get("labels", labels)))
             timeout = float(cfg.get("timeout", timeout))
             if not 0 <= timeout <= MAX_TIMEOUT:  # also rejects NaN
@@ -96,7 +96,7 @@ def load_config():
             agent_rgb = parse_color(cfg["agent_color"]) if "agent_color" in cfg else AGENT_RGB
             agent_colors = cfg.get("agent_colors") or {}
             if not isinstance(agent_colors, dict):
-                raise ValueError("agent_colors must be an object")
+                raise TypeError("agent_colors must be an object")
             agent_colors = {str(name).lower(): parse_color(color) for name, color in agent_colors.items()}
             AGENT_RGB = agent_rgb
             AGENT_COLORS.update(agent_colors)
@@ -134,7 +134,7 @@ def herdr_socket(path, method, params):
                 if not chunk:
                     break
                 reply += chunk
-    except socket.timeout:
+    except socket.timeout:  # noqa: UP041 -- not an alias of TimeoutError until Python 3.10 (we support 3.8+)
         sys.exit(f"display-panes: Herdr socket did not respond within {HERDR_TIMEOUT}s")
     except OSError as e:
         sys.exit(f"display-panes: could not reach Herdr socket: {e}")
