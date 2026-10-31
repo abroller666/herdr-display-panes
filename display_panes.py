@@ -410,7 +410,7 @@ def main():
     try:
         tty.setraw(fd, termios.TCSANOW)  # keep keys pressed before raw mode
         pending = query_terminal_colors(fd)
-        sys.stdout.write("\033[?25l")
+        sys.stdout.write("\033[?1049h\033[?25l")  # alternate screen, hide cursor
         draw(panes, labels, layout["area"], infos)
         if pending:
             key = pending[0]
@@ -419,7 +419,7 @@ def main():
             key = os.read(fd, 1).decode(errors="ignore") if ready else ""
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
-        sys.stdout.write("\033[?25h")
+        sys.stdout.write("\033[?25h\033[?1049l")  # show cursor, restore the screen
         sys.stdout.flush()
 
     if key and key in labels[: len(panes)]:
