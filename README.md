@@ -83,7 +83,8 @@ Optional. Create `config.json` in the plugin config directory
   "agent_color": "#9ece6a",
   "agent_colors": {
     "claude": "#d97757",
-    "codex": "#7aa2f7"
+    "codex": "#7aa2f7",
+    "devin": "#ffffff"
   }
 }
 ```
