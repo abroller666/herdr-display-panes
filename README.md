@@ -31,8 +31,10 @@ Press a key to jump / q or Esc to close
 - **Keycap badges**: each pane's key is shown on a colored badge. Agent panes
   are colored, shell panes are gray. Badges shrink to fit small panes and stay
   the same size across the map.
-- **Current pane stands out**: a tinted background, a heavy border and a
-  `● current` title; the other panes are dimmed.
+- **Current pane stands out**: a tinted background, a heavy border and a `●`
+  in its title; the other panes are dimmed.
+- **Pane titles**: a pane's title (its Herdr label), when set, is shown on its
+  top border.
 - **Agent info**: agent panes show the agent name and session title; shell
   panes show the working directory.
 - **Your colors**: pick one color for all agents, or a color per agent

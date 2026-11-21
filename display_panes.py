@@ -307,6 +307,13 @@ def draw(panes, labels, area, infos):
             grid[y][x] = ch
             color[y][x] = c
 
+    def put_text(x, y, text, c):
+        for ch in text:
+            put(x, y, ch, c)
+            if display_width(ch) == 2:
+                put(x + 1, y, "", c)  # the wide char covers the next cell
+            x += display_width(ch)
+
     boxes = []
     for mark, p in zip(labels, panes):
         r = p["rect"]
@@ -351,10 +358,14 @@ def draw(panes, labels, area, infos):
             put(x1, y, v_, c)
         for x, y, ch in ((x0, y0, tl), (x1, y0, tr), (x0, y1, bl), (x1, y1, br)):
             put(x, y, ch, c)
-        title = " ● current "
-        if focused and x1 - x0 - 3 >= len(title):
-            for i, ch in enumerate(title):
-                put(x0 + 2 + i, y0, ch, c)
+        # border heading: the pane's own title, with a dot on the focused pane
+        name = sanitize(info.get("label") or "").strip()
+        prefix = "● " if focused else ""
+        room = x1 - x0 - 3  # cells between the corner padding
+        if name and room - 2 - len(prefix) >= 1:
+            put_text(x0 + 2, y0, f" {prefix}{fit(name, room - 2 - len(prefix))} ", c)
+        elif focused and room >= 3:
+            put_text(x0 + 2, y0, " ● ", c)
 
         badge_style = BOLD + bg(rgb or IDLE_BADGE_RGB) + fg(BADGE_TEXT_RGB if rgb else IDLE_BADGE_TEXT_RGB)
         inner_w, inner_h = x1 - x0 - 1, y1 - y0 - 1
@@ -377,12 +388,7 @@ def draw(panes, labels, area, infos):
             text_rgb = rgb if rgb and n == 0 and info.get("agent") else TEXT_RGB
             style = BOLD + fg(text_rgb if focused else mix(text_rgb, 0.55))
             text = fit(sanitize(text), width)
-            x = cx - display_width(text) // 2
-            for ch in text:
-                put(x, y, ch, style)
-                if display_width(ch) == 2:
-                    put(x + 1, y, "", style)
-                x += display_width(ch)
+            put_text(cx - display_width(text) // 2, y, text, style)
             y += 1
 
     out = ["\033[2J\033[H"]
