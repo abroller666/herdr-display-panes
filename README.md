@@ -87,7 +87,8 @@ Optional. Create `config.json` in the plugin config directory
     "claude": "#d97757",
     "codex": "#7aa2f7",
     "devin": "#ffffff"
-  }
+  },
+  "shell_color": "#ffffff"
 }
 ```
 
@@ -101,6 +102,9 @@ Optional. Create `config.json` in the plugin config directory
   Defaults to green.
 - `agent_colors`: per-agent overrides keyed by agent name (case-insensitive).
   Agents not listed use `agent_color`.
+- `shell_color`: border and badge color for the focused shell pane (a pane
+  with no agent running). Defaults to the terminal's foreground color (white
+  on dark themes). Unfocused shell panes stay gray.
 
 ## License
 
