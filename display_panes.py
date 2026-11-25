@@ -41,9 +41,12 @@ GRAY_RGB = (95, 111, 100)
 TEXT_RGB = (156, 163, 175)
 IDLE_BADGE_RGB = (75, 85, 99)
 IDLE_BADGE_TEXT_RGB = (229, 231, 235)
+FG_RGB = (229, 231, 235)  # the terminal's foreground (white on dark)
 # Agent pane colors; overridable with "agent_color" / "agent_colors" in config.json.
 AGENT_RGB = GREEN_RGB  # default for every agent
 AGENT_COLORS = {}  # agent name (lowercase) -> RGB
+# Focused shell pane color; overridable with "shell_color". None follows FG_RGB.
+SHELL_RGB = None
 
 BOLD = "\033[1m"
 RESET = "\033[0m"
@@ -80,7 +83,7 @@ def parse_labels(value):
 
 def load_config():
     """Read optional overrides from $HERDR_PLUGIN_CONFIG_DIR/config.json."""
-    global AGENT_RGB
+    global AGENT_RGB, SHELL_RGB
     labels, timeout = DEFAULT_LABELS, DEFAULT_TIMEOUT
     config_dir = os.environ.get("HERDR_PLUGIN_CONFIG_DIR")
     if config_dir:
@@ -98,7 +101,9 @@ def load_config():
             if not isinstance(agent_colors, dict):
                 raise TypeError("agent_colors must be an object")
             agent_colors = {str(name).lower(): parse_color(color) for name, color in agent_colors.items()}
+            shell_rgb = parse_color(cfg["shell_color"]) if "shell_color" in cfg else SHELL_RGB
             AGENT_RGB = agent_rgb
+            SHELL_RGB = shell_rgb
             AGENT_COLORS.update(agent_colors)
         except FileNotFoundError:
             pass
@@ -216,7 +221,7 @@ def accent(info, focused):
     agent = (info.get("agent") or "").lower()
     if agent:
         return AGENT_COLORS.get(agent, AGENT_RGB)
-    return GREEN_RGB if focused else None
+    return (SHELL_RGB or FG_RGB) if focused else None
 
 
 def mix(rgb, amount, base=None):
@@ -226,8 +231,9 @@ def mix(rgb, amount, base=None):
 
 def use_terminal_colors(bg_rgb, fg_rgb):
     """Derive the neutral colors from the terminal so light themes work too."""
-    global BASE_RGB, GRAY_RGB, TEXT_RGB, IDLE_BADGE_RGB, IDLE_BADGE_TEXT_RGB
+    global BASE_RGB, GRAY_RGB, TEXT_RGB, IDLE_BADGE_RGB, IDLE_BADGE_TEXT_RGB, FG_RGB
     BASE_RGB = bg_rgb
+    FG_RGB = fg_rgb
     GRAY_RGB = mix(fg_rgb, 0.4)
     TEXT_RGB = mix(fg_rgb, 0.75)
     IDLE_BADGE_RGB = mix(fg_rgb, 0.5)
@@ -367,7 +373,13 @@ def draw(panes, labels, area, infos):
         elif focused and room >= 3:
             put_text(x0 + 2, y0, " ● ", c)
 
-        badge_style = BOLD + bg(rgb or IDLE_BADGE_RGB) + fg(BADGE_TEXT_RGB if rgb else IDLE_BADGE_TEXT_RGB)
+        if not rgb:
+            badge_rgb, badge_text_rgb = IDLE_BADGE_RGB, IDLE_BADGE_TEXT_RGB
+        elif info.get("agent"):
+            badge_rgb, badge_text_rgb = rgb, BADGE_TEXT_RGB
+        else:  # focused shell pane; the default foreground-colored badge gets background-colored text
+            badge_rgb, badge_text_rgb = rgb, BADGE_TEXT_RGB if SHELL_RGB else BASE_RGB
+        badge_style = BOLD + bg(badge_rgb) + fg(badge_text_rgb)
         inner_w, inner_h = x1 - x0 - 1, y1 - y0 - 1
         cx = (x0 + x1) // 2
         mark_rows, gap, lines = layouts[choice]

@@ -87,7 +87,8 @@ description = "display panes"
     "claude": "#d97757",
     "codex": "#7aa2f7",
     "devin": "#ffffff"
-  }
+  },
+  "shell_color": "#ffffff"
 }
 ```
 
@@ -100,6 +101,9 @@ description = "display panes"
   省略時は緑です。
 - `agent_colors`: エージェントごとの色 (エージェント名で指定、大文字小文字は区別しない)。
   書いていないエージェントは `agent_color` の色になります。
+- `shell_color`: カーソルのあるシェルのペイン (エージェントを起動していないペイン) の
+  枠とバッジの色。省略時はターミナルの文字色 (暗いテーマでは白) です。
+  カーソルのないシェルのペインはグレーのままです。
 
 ## ライセンス
 
