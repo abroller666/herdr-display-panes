@@ -120,9 +120,15 @@ def herdr_cli(*args):
         out = subprocess.run([HERDR, *args], capture_output=True, text=True, check=True, timeout=HERDR_TIMEOUT)
     except subprocess.TimeoutExpired:
         sys.exit(f"display-panes: herdr {' '.join(args)} did not respond within {HERDR_TIMEOUT}s")
+    except subprocess.CalledProcessError as e:
+        detail = (e.stderr or "").strip().splitlines()
+        sys.exit(f"display-panes: herdr {' '.join(args)} failed" + (f": {detail[-1]}" if detail else ""))
     except OSError as e:
         sys.exit(f"display-panes: could not run herdr: {e}")
-    return json.loads(out.stdout)["result"]
+    try:
+        return json.loads(out.stdout)["result"]
+    except (ValueError, KeyError, TypeError):
+        sys.exit(f"display-panes: unexpected output from herdr {' '.join(args)}")
 
 
 def herdr_socket(path, method, params):
@@ -160,9 +166,25 @@ def herdr(method, params, *cli_args):
 
 
 def focus(pane_id):
+    """Focus a pane. Needs the socket: the Herdr CLI cannot focus a pane by id."""
     path = os.environ.get("HERDR_SOCKET_PATH")
-    if path:
-        herdr_socket(path, "pane.focus", {"pane_id": pane_id})
+    if not path:
+        sys.exit("display-panes: cannot jump to the pane: HERDR_SOCKET_PATH is not set"
+                 " (run display-panes from Herdr's plugin action)")
+    herdr_socket(path, "pane.focus", {"pane_id": pane_id})
+
+
+def show_error(fd, message, timeout):
+    """Keep the popup open with the error until a key is pressed, so it isn't lost."""
+    sys.stdout.write(f"\033[2J\033[H{message}\r\n\r\n{fg(GRAY_RGB)}Press any key to close{RESET}")
+    sys.stdout.flush()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd, termios.TCSANOW)
+        if select.select([fd], [], [], timeout)[0]:
+            os.read(fd, 1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 def find_pane_id(value):
@@ -441,7 +463,12 @@ def main():
         sys.stdout.flush()
 
     if key and key in labels[: len(panes)]:
-        focus(panes[labels.index(key)]["pane_id"])
+        try:
+            focus(panes[labels.index(key)]["pane_id"])
+        except SystemExit as e:
+            if isinstance(e.code, str):
+                show_error(fd, e.code, timeout or DEFAULT_TIMEOUT)
+            raise
 
 
 if __name__ == "__main__":
